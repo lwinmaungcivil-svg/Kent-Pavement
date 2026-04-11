@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KSU Pavement Condition Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f4f0;
+    --color-background-tertiary: #1a3a6b;
+    --color-text-primary: #1a1a18;
+    --color-text-secondary: #5f5e5a;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.12);
+    --color-border-secondary: rgba(0,0,0,0.22);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1e1e1c;
+      --color-background-secondary: #2a2a27;
+      --color-background-tertiary: #242422;
+      --color-text-primary: #f0efeb;
+      --color-text-secondary: #a8a79f;
+      --color-text-tertiary: #6e6d68;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+      --color-border-secondary: rgba(255,255,255,0.2);
+    }
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-sans);background:var(--color-background-tertiary);color:var(--color-text-primary);padding:1.5rem;}
+  input,select,textarea,button{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 10px;outline:none;width:100%;}
+  input:focus,select:focus,textarea:focus{box-shadow:0 0 0 2px rgba(24,95,165,0.25);}
+  button{cursor:pointer;width:auto;}
+  .page{max-width:1100px;margin:0 auto;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px;}
+  .metric-row{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin-bottom:1rem;}
+  .mc{background:rgba(255,255,255,0.15);border:0.5px solid rgba(255,255,255,0.3);border-radius:var(--border-radius-md);padding:.75rem 1rem;backdrop-filter:blur(4px);}
+  .ml{font-size:12px;color:rgba(255,255,255,0.8);margin-bottom:4px;}
+  .mv{font-size:22px;font-weight:600;color:#ffffff;}
+  .card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem;margin-bottom:1rem;}
+  .section-title{font-size:15px;font-weight:500;color:var(--color-text-primary);margin-bottom:10px;}
+  .drop-zone{border:1.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-md);padding:1.5rem;text-align:center;cursor:pointer;transition:background .15s;}
+  .drop-zone:hover{background:var(--color-background-secondary);}
+  .drop-text{font-size:13px;color:var(--color-text-secondary);}
+  .tag{font-size:11px;font-weight:500;padding:3px 8px;border-radius:var(--border-radius-md);white-space:nowrap;}
+  .tag-alligator{background:#FAECE7;color:#993C1D;}
+  .tag-longitudinal{background:#E6F1FB;color:#185FA5;}
+  .tag-transverse{background:#FAEEDA;color:#854F0B;}
+  .tag-edge{background:#EAF3DE;color:#3B6D11;}
+  .tag-potholes{background:#FCEBEB;color:#A32D2D;}
+  .tag-sidewalk{background:#EEEDFE;color:#534AB7;}
+  .map-wrap{width:100%;height:460px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);overflow:hidden;position:relative;}
+  #leaflet-map{width:100%;height:100%;}
+  label{font-size:13px;color:var(--color-text-secondary);display:block;margin-bottom:3px;}
+  textarea{min-height:56px;resize:vertical;}
+  .btn{display:inline-block;padding:7px 16px;font-size:13px;cursor:pointer;background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);color:var(--color-text-primary);transition:background .15s;width:auto;}
+  .btn:hover{background:var(--color-background-secondary);}
+  .btn-blue{background:#185FA5;color:#fff;border-color:#185FA5;}
+  .btn-blue:hover{background:#0C447C;}
+  .btn-blue:disabled{background:#aac4e0;border-color:#aac4e0;cursor:not-allowed;}
+  .feed-item{display:flex;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary);}
+  .feed-item:last-child{border-bottom:none;}
+  .feed-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+  .feed-loc{font-size:13px;font-weight:500;color:var(--color-text-primary);}
+  .feed-meta{font-size:12px;color:var(--color-text-tertiary);margin-top:2px;}
+  .feed-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer;border:0.5px solid var(--color-border-tertiary);}
+  .gps-result{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 14px;font-size:13px;color:var(--color-text-primary);margin-top:10px;display:none;}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;}
+  .leg{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--color-text-secondary);}
+  .leg-dot{width:10px;height:10px;border-radius:50%;}
+  .two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:1rem;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  .flash{background:#EAF3DE;border:0.5px solid #C0DD97;border-radius:var(--border-radius-md);padding:8px 14px;font-size:13px;color:#27500A;margin-bottom:10px;display:none;}
+  .uploading{background:#E6F1FB;border:0.5px solid #185FA5;border-radius:var(--border-radius-md);padding:8px 14px;font-size:13px;color:#185FA5;margin-bottom:10px;display:none;}
+  /* Lightbox */
+  .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;}
+  .lightbox.active{display:flex;}
+  .lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;}
+  .lightbox-close{position:absolute;top:18px;right:24px;font-size:28px;color:#fff;cursor:pointer;line-height:1;}
+  @media(max-width:700px){
+    .metric-row{grid-template-columns:repeat(2,1fr);}
+    .two-col{grid-template-columns:1fr;}
+    .form-grid{grid-template-columns:1fr;}
+    body{padding:.75rem;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div>
+      <div style="font-size:20px;font-weight:500;color:#ffffff;">KSU Pavement Condition Map</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:2px;">Community pavement reporting — 1 mile radius around Kent State University</div>
+    </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.7);" id="datestamp"></div>
+    <button class="btn btn-blue" onclick="downloadPDF()" style="font-size:12px;padding:6px 14px;">⬇ Download Report PDF</button>
+  </div>
+
+  <div class="metric-row" id="metrics"></div>
+
+  <div class="two-col">
+    <div>
+      <div class="card">
+        <div class="section-title">Submit a report</div>
+        <div id="flash" class="flash">✅ Report saved to database!</div>
+        <div id="uploading" class="uploading">⏳ Uploading photo and saving report…</div>
+
+        <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:8px;">Step 1 — add a photo to extract GPS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="drop-zone" onclick="document.getElementById('photoInput').click()" style="padding:1rem;">
+            <div style="margin-bottom:6px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--color-text-tertiary);display:block;margin:0 auto;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+            <div class="drop-text" style="font-weight:500;">Upload photo</div>
+            <div class="drop-text" style="font-size:11px;margin-top:2px;">From Camera Roll or files</div>
+            <input type="file" id="photoInput" accept="image/*" style="display:none;width:auto;border:none;padding:0;" onchange="handlePhoto(event)">
+          </div>
+          <div class="drop-zone" onclick="document.getElementById('cameraInput').click()" style="padding:1rem;">
+            <div style="margin-bottom:6px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--color-text-tertiary);display:block;margin:0 auto;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+            <div class="drop-text" style="font-weight:500;">Take a photo</div>
+            <div class="drop-text" style="font-size:11px;margin-top:2px;">Use device camera</div>
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;width:auto;border:none;padding:0;" onchange="handlePhoto(event)">
+          </div>
+        </div>
+        <div id="preview-wrap" style="display:none;margin-top:10px;position:relative;">
+          <img id="photo-preview" style="width:100%;max-height:160px;object-fit:cover;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);">
+          <button onclick="clearPhoto()" style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;padding:0;font-size:14px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;cursor:pointer;">&#x2715;</button>
+        </div>
+        <div class="gps-result" id="gps-result">
+          <span style="color:var(--color-text-secondary);">GPS extracted:</span>
+          <span id="gps-display" style="font-weight:500;margin-left:6px;"></span>
+        </div>
+
+        <div style="margin-top:14px;margin-bottom:8px;font-size:13px;color:var(--color-text-secondary);">Step 2 — or enter coordinates and date manually</div>
+        <div class="form-grid">
+          <div><label>Latitude</label><input type="number" id="f-lat" placeholder="e.g. 41.1460" step="0.0001"></div>
+          <div><label>Longitude</label><input type="number" id="f-lng" placeholder="e.g. -81.3395" step="0.0001"></div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label>Date photo taken</label>
+          <input type="date" id="f-date">
+        </div>
+
+        <div style="margin-bottom:8px;font-size:13px;color:var(--color-text-secondary);">Step 3 — describe the condition</div>
+        <div style="margin-bottom:10px;">
+          <label style="color:red;">Type of crack</label>
+          <select id="f-type">
+            <option value="">Select…</option>
+            <option>Alligator Cracking</option>
+            <option>Longitudinal Cracking</option>
+            <option>Transverse Cracking</option>
+            <option>Edge Cracking</option>
+            <option>Potholes</option>
+            <option>Broken Sidewalk</option>
+          </select>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="color:red;">Street / location name</label>
+          <select id="f-street">
+            <option value="">Select or type a street name...</option>
+            <option>Campus Center Drive</option>
+            <option>Chiarucci Drive</option>
+            <option>College Avenue</option>
+            <option>Dunbar Drive</option>
+            <option>East Main Street (OH-59)</option>
+            <option>East Summit Street</option>
+            <option>Fairchild Avenue</option>
+            <option>Franklin Avenue</option>
+            <option>Haymaker Parkway</option>
+            <option>Horning Road</option>
+            <option>Jackson Drive</option>
+            <option>Johnnycake Road</option>
+            <option>Lincoln Street</option>
+            <option>Loop Road</option>
+            <option>Midway Drive</option>
+            <option>North Depeyster Street</option>
+            <option>Powder Mill Road</option>
+            <option>Rhodes Road</option>
+            <option>Risman Drive</option>
+            <option>South Depeyster Street</option>
+            <option>South Water Street / North Water Street</option>
+            <option>State Route 261 (SR-261)</option>
+            <option>Stow Road</option>
+            <option>Ted Boyd Drive</option>
+            <option>Terrace Drive</option>
+            <option>University Drive</option>
+            <option>White Hall Drive</option>
+            <option>Willow Street</option>
+          </select>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="color:red;">Notes</label>
+          <textarea id="f-notes" placeholder="Describe the damage, hazard level, any extra details…"></textarea>
+        </div>
+        <div style="text-align:right;">
+          <button class="btn btn-blue" id="submit-btn" onclick="submitReport()">Add to map</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Recent reports</div>
+        <ul id="feed" style="list-style:none;"></ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="padding:1rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="section-title" style="margin:0;">Kent Live Map</div>
+          <select id="filter-cond" onchange="renderMarkers()" style="width:auto;font-size:12px;">
+            <option value="">All types</option>
+            <option>Alligator Cracking</option>
+            <option>Longitudinal Cracking</option>
+            <option>Transverse Cracking</option>
+            <option>Edge Cracking</option>
+            <option>Potholes</option>
+            <option>Broken Sidewalk</option>
+          </select>
+        </div>
+        <div class="map-wrap"><div id="leaflet-map"></div></div>
+        <div class="legend">
+          <span class="leg"><span class="leg-dot" style="background:#D85A30;"></span>Alligator</span>
+          <span class="leg"><span class="leg-dot" style="background:#185FA5;"></span>Longitudinal</span>
+          <span class="leg"><span class="leg-dot" style="background:#EF9F27;"></span>Transverse</span>
+          <span class="leg"><span class="leg-dot" style="background:#639922;"></span>Edge</span>
+          <span class="leg"><span class="leg-dot" style="background:#E24B4A;"></span>Potholes</span>
+          <span class="leg"><span class="leg-dot" style="background:#534AB7;"></span>Broken Sidewalk</span>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--color-text-tertiary);">Centered on Kent State University · Click pins for details and photo</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Invalid Photo Modal -->
+<div id="invalid-photo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:320px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);text-align:center;">
+    <div style="font-size:28px;margin-bottom:12px;">🚫</div>
+    <div style="font-size:16px;font-weight:700;color:#1a1a18;margin-bottom:8px;">Invalid Photo</div>
+    <div style="font-size:13px;color:#555;line-height:1.6;margin-bottom:20px;">This photo does not appear to show pavement or sidewalk damage. Please upload a photo of a road crack, pothole, or sidewalk issue.</div>
+    <button onclick="closeInvalidPhotoModal()" style="background:#002664;color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">OK, Try Another Photo</button>
+  </div>
+</div>
+
+<!-- Duplicate Report Modal -->
+<div id="duplicate-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:320px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.25);text-align:center;">
+    <div style="font-size:28px;margin-bottom:12px;">⚠️</div>
+    <div style="font-size:16px;font-weight:700;color:#1a1a18;margin-bottom:8px;">Duplicate Picture</div>
+    <div style="font-size:13px;color:#555;line-height:1.6;margin-bottom:20px;">This picture was already reported at <strong id="dup-date"></strong>. Please try a different spot.</div>
+    <button onclick="closeDuplicateModal()" style="background:#002664;color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:13px;font-weight:600;cursor:pointer;width:100%;">OK, Got It</button>
+  </div>
+</div>
+
+<!-- Lightbox for viewing photos -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close" onclick="closeLightbox()">&#x2715;</span>
+  <img id="lightbox-img" src="" alt="Report photo">
+</div>
+
+<!-- Leaflet + EXIF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+// ── Firebase Config ──────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyDFdcAQvOEDL9rw5clm5PF01mDm6KdjWYY",
+  authDomain: "kent-pavement-condition.firebaseapp.com",
+  projectId: "kent-pavement-condition",
+  storageBucket: "kent-pavement-condition.firebasestorage.app",
+  messagingSenderId: "670782717267",
+  appId: "1:670782717267:web:dff740e51bab730be435a6",
+  measurementId: "G-VVCC8FV0V3"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// ── Constants ────────────────────────────────────────────
+const CENTER_LAT = 41.146027;
+const CENTER_LNG = -81.3394763;
+
+const TYPE_COLOR = {'Alligator Cracking':'#D85A30','Longitudinal Cracking':'#185FA5','Transverse Cracking':'#EF9F27','Edge Cracking':'#639922','Potholes':'#E24B4A','Broken Sidewalk':'#534AB7'};
+const TYPE_TAG = {'Alligator Cracking':'tag-alligator','Longitudinal Cracking':'tag-longitudinal','Transverse Cracking':'tag-transverse','Edge Cracking':'tag-edge','Potholes':'tag-potholes','Broken Sidewalk':'tag-sidewalk'};
+
+let reports = [];
+let currentPhotoFile = null;
+
+// ── Leaflet Map ──────────────────────────────────────────
+const map = L.map('leaflet-map', {minZoom: 14, maxZoom: 19, zoomSnap: 1}).setView([CENTER_LAT, CENTER_LNG], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19
+}).addTo(map);
+
+// Lock panning to exactly 1 mile radius around Kent State
+// 1 mile ≈ 0.0145 degrees latitude, 0.0188 degrees longitude
+const strictBounds = L.latLngBounds(
+  [CENTER_LAT - 0.0145, CENTER_LNG - 0.0188],
+  [CENTER_LAT + 0.0145, CENTER_LNG + 0.0188]
+);
+map.setMaxBounds(strictBounds);
+map.on('drag', () => map.panInsideBounds(strictBounds, {animate: false}));
+map.on('zoomend', () => { if(map.getZoom() < 14) map.setZoom(14); });
+
+let markersLayer = L.layerGroup().addTo(map);
+
+function makeIcon(color) {
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></div>`,
+    iconSize:[10,10], iconAnchor:[5,5]
+  });
+}
+
+function renderMarkers() {
+  markersLayer.clearLayers();
+  const filter = document.getElementById('filter-cond').value;
+  const toShow = filter ? reports.filter(r=>r.type===filter) : reports;
+  toShow.forEach(r => {
+    const color = TYPE_COLOR[r.type]||'#888';
+    const photoHtml = r.photoURL
+      ? `<img src="${r.photoURL}" onclick="openLightbox('${r.photoURL}')" style="width:100%;max-height:120px;object-fit:cover;border-radius:5px;margin-top:6px;cursor:pointer;" />`
+      : '';
+    L.marker([r.lat, r.lng], {icon: makeIcon(color)}).bindPopup(`
+      <div style="font-family:-apple-system,sans-serif;min-width:180px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">${r.street}</div>
+        <span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px;background:${color}22;color:${color};">${r.type}</span>
+        ${r.notes?`<div style="font-size:12px;color:#555;margin-top:6px;">${r.notes}</div>`:''}
+        ${photoHtml}
+        <div style="font-size:11px;color:#999;margin-top:6px;">${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</div>
+        <div style="font-size:11px;color:#999;">${r.date}</div>
+      </div>`).addTo(markersLayer);
+  });
+}
+
+// ── AI Photo Validation ───────────────────────────────────
+async function validatePhotoWithAI(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const base64 = ev.target.result.split(',')[1];
+        const mediaType = file.type || 'image/jpeg';
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 50,
+            messages: [{
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: mediaType, data: base64 }
+                },
+                {
+                  type: 'text',
+                  text: 'Does this image show pavement, road surface, cracks, potholes, or sidewalk damage? Answer only YES or NO.'
+                }
+              ]
+            }]
+          })
+        });
+        const data = await response.json();
+        const answer = data.content?.[0]?.text?.trim().toUpperCase() || 'NO';
+        resolve(answer.includes('YES'));
+      } catch (err) {
+        console.error('AI check failed:', err);
+        resolve(true); // If AI check fails, allow upload anyway
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Invalid Photo Modal ───────────────────────────────────
+window.showInvalidPhotoModal = function() {
+  document.getElementById('invalid-photo-modal').style.display = 'flex';
+};
+window.closeInvalidPhotoModal = function() {
+  document.getElementById('invalid-photo-modal').style.display = 'none';
+};
+
+// ── Duplicate Modal ───────────────────────────────────────
+window.showDuplicateModal = function(existing) {
+  const time = existing.createdAt
+    ? new Date(existing.createdAt).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', hour12:true})
+    : 'an earlier time';
+  document.getElementById('dup-date').textContent = time;
+  document.getElementById('dup-street').textContent = existing.street || 'Unknown location';
+  document.getElementById('dup-type').textContent = existing.type || '—';
+  const modal = document.getElementById('duplicate-modal');
+  modal.style.display = 'flex';
+};
+window.closeDuplicateModal = function() {
+  document.getElementById('duplicate-modal').style.display = 'none';
+};
+
+// ── Lightbox ─────────────────────────────────────────────
+window.openLightbox = function(url) {
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox').classList.add('active');
+};
+window.closeLightbox = function() {
+  document.getElementById('lightbox').classList.remove('active');
+};
+
+// ── EXIF ─────────────────────────────────────────────────
+function dmsToDecimal(dms, ref) {
+  let dec = dms[0].numerator/dms[0].denominator + dms[1].numerator/dms[1].denominator/60 + dms[2].numerator/dms[2].denominator/3600;
+  if (ref==='S'||ref==='W') dec = -dec;
+  return dec;
+}
+
+window.handlePhoto = function(e) {
+  const file = e.target.files[0]; if (!file) return;
+  currentPhotoFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('photo-preview').src = ev.target.result;
+    document.getElementById('preview-wrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  EXIF.getData(file, function() {
+    const lat=EXIF.getTag(this,'GPSLatitude'), latRef=EXIF.getTag(this,'GPSLatitudeRef');
+    const lng=EXIF.getTag(this,'GPSLongitude'), lngRef=EXIF.getTag(this,'GPSLongitudeRef');
+    const res=document.getElementById('gps-result'), disp=document.getElementById('gps-display');
+    res.style.display='block';
+    if (lat&&lng) {
+      const elat=dmsToDecimal(lat,latRef), elng=dmsToDecimal(lng,lngRef);
+      document.getElementById('f-lat').value=elat.toFixed(6);
+      document.getElementById('f-lng').value=elng.toFixed(6);
+      disp.textContent=elat.toFixed(5)+', '+elng.toFixed(5);
+    } else {
+      disp.textContent='No GPS found. Enter coordinates manually.';
+      res.style.color='#A32D2D';
+    }
+    const dateTag=EXIF.getTag(this,'DateTimeOriginal')||EXIF.getTag(this,'DateTime');
+    if (dateTag) {
+      const parts=dateTag.split(' ')[0].split(':');
+      if (parts.length===3) document.getElementById('f-date').value=`${parts[0]}-${parts[1]}-${parts[2]}`;
+    } else {
+      document.getElementById('f-date').value=new Date().toISOString().slice(0,10);
+    }
+  });
+};
+
+window.clearPhoto = function() {
+  currentPhotoFile = null;
+  document.getElementById('photo-preview').src='';
+  document.getElementById('preview-wrap').style.display='none';
+  document.getElementById('gps-result').style.display='none';
+  document.getElementById('f-lat').value='';
+  document.getElementById('f-lng').value='';
+  document.getElementById('f-date').value='';
+  document.getElementById('photoInput').value='';
+  document.getElementById('cameraInput').value='';
+};
+
+function resetForm() {
+  // Reset ALL fields back to empty state like the screenshot
+  ['f-lat','f-lng','f-notes','f-date'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('f-type').selectedIndex = 0;
+  document.getElementById('f-street').selectedIndex = 0;
+  document.getElementById('photo-preview').src = '';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('gps-result').style.display = 'none';
+  document.getElementById('uploading').style.display = 'none';
+  document.getElementById('flash').style.display = 'none';
+  document.getElementById('photoInput').value = '';
+  document.getElementById('cameraInput').value = '';
+  document.getElementById('submit-btn').disabled = false;
+  currentPhotoFile = null;
+}
+
+// ── Submit to Firebase ────────────────────────────────────
+window.submitReport = async function() {
+  const lat=parseFloat(document.getElementById('f-lat').value);
+  const lng=parseFloat(document.getElementById('f-lng').value);
+  const type=document.getElementById('f-type').value;
+  const street=document.getElementById('f-street').value.trim();
+  const notes=document.getElementById('f-notes').value.trim();
+  const date=document.getElementById('f-date').value || new Date().toISOString().slice(0,10);
+
+  if (isNaN(lat)||isNaN(lng)) { alert('Please enter valid GPS coordinates.'); return; }
+  if (!type) { alert('Please select a type of crack.'); return; }
+
+  // ── Duplicate location check (within ~10 meters) ──────
+  const THRESHOLD = 0.0001; // ~10 meters
+  const duplicate = reports.find(r =>
+    Math.abs(r.lat - lat) < THRESHOLD &&
+    Math.abs(r.lng - lng) < THRESHOLD &&
+    r.date === date
+  );
+  if (duplicate) {
+    showDuplicateModal(duplicate);
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  document.getElementById('uploading').style.display = 'block';
+  document.getElementById('uploading').textContent = '🔍 Checking photo with AI…';
+
+  // Safety timeout
+  const safetyTimer = setTimeout(() => {
+    btn.disabled = false;
+    document.getElementById('uploading').style.display = 'none';
+    alert('Upload timed out. Please check your internet connection and try again.');
+  }, 60000);
+
+  try {
+    // ── AI Photo Validation ───────────────────────────────
+    if (currentPhotoFile) {
+      const isValid = await validatePhotoWithAI(currentPhotoFile);
+      if (!isValid) {
+        clearTimeout(safetyTimer);
+        btn.disabled = false;
+        document.getElementById('uploading').style.display = 'none';
+        showInvalidPhotoModal();
+        return;
+      }
+    }
+
+    document.getElementById('uploading').textContent = '⏳ Uploading photo and saving report…';
+
+    let photoURL = '';
+    if (currentPhotoFile) {
+      // Organize by street name — clean it up for use as a folder name
+      const folderName = (street || 'Unknown-Location')
+        .trim()
+        .replace(/[^a-zA-Z0-9\s-]/g, '')  // remove special chars
+        .replace(/\s+/g, '-')              // spaces to dashes
+        .substring(0, 50);                 // max 50 chars
+      const fileName = `photos/${folderName}/${Date.now()}_${currentPhotoFile.name.replace(/[^a-zA-Z0-9.]/g,'_')}`;
+      const storageRef = ref(storage, fileName);
+      await uploadBytes(storageRef, currentPhotoFile);
+      photoURL = await getDownloadURL(storageRef);
+    }
+
+    await addDoc(collection(db, 'reports'), {
+      lat, lng,
+      street: street || 'Unknown location',
+      type, notes, date, photoURL,
+      createdAt: new Date().toISOString()
+    });
+
+    clearTimeout(safetyTimer);
+    document.getElementById('uploading').style.display='none';
+    const fl=document.getElementById('flash');
+    fl.style.display='block';
+    setTimeout(()=>{ resetForm(); }, 3000);
+
+  } catch(err) {
+    clearTimeout(safetyTimer);
+    console.error('Error saving report:', err);
+    document.getElementById('uploading').style.display='none';
+    alert('Error: ' + err.message + '\n\nTip: Check your internet connection and try again.');
+  }
+
+  btn.disabled = false;
+};
+
+// ── Metrics ───────────────────────────────────────────────
+function renderMetrics() {
+  const types=['Alligator Cracking','Longitudinal Cracking','Transverse Cracking','Edge Cracking','Potholes','Broken Sidewalk'];
+  const short=['Alligator','Longitudinal','Transverse','Edge','Potholes','Sidewalk'];
+  const colors=[{bg:'#FAECE7',text:'#993C1D'},{bg:'#E6F1FB',text:'#185FA5'},{bg:'#FAEEDA',text:'#854F0B'},{bg:'#EAF3DE',text:'#3B6D11'},{bg:'#FCEBEB',text:'#A32D2D'},{bg:'#EEEDFE',text:'#534AB7'}];
+  document.getElementById('metrics').innerHTML=
+    `<div class="mc"><div class="ml">Total reports</div><div class="mv">${reports.length}</div></div>`+
+    types.map((tp,i)=>`<div class="mc" style="background:${colors[i].bg};"><div class="ml" style="font-size:11px;color:${colors[i].text};">${short[i]}</div><div class="mv" style="color:${colors[i].text};">${reports.filter(r=>r.type===tp).length}</div></div>`).join('');
+}
+
+// ── Feed ──────────────────────────────────────────────────
+function renderFeed() {
+  if (reports.length===0) {
+    document.getElementById('feed').innerHTML='<li style="font-size:13px;color:var(--color-text-tertiary);padding:10px 0;">No reports yet. Be the first to submit!</li>';
+    return;
+  }
+  document.getElementById('feed').innerHTML = reports.map(r=>`
+    <li class="feed-item">
+      ${r.photoURL ? `<img class="feed-thumb" src="${r.photoURL}" onclick="openLightbox('${r.photoURL}')" />` : `<span class="feed-dot" style="background:${TYPE_COLOR[r.type]||'#888'};margin-top:4px;"></span>`}
+      <div style="flex:1;">
+        <div class="feed-loc">${r.street} <span class="tag ${TYPE_TAG[r.type]||''}">${r.type}</span></div>
+        <div class="feed-meta">${r.date} · ${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</div>
+        ${r.notes?`<div class="feed-meta" style="margin-top:2px;">${r.notes}</div>`:''}
+      </div>
+    </li>`).join('');
+}
+
+function renderAll() { renderMetrics(); renderFeed(); renderMarkers(); }
+
+// ── Listen to Firestore in real-time ─────────────────────
+const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
+onSnapshot(q, (snapshot) => {
+  reports = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+  renderAll();
+});
+
+document.getElementById('datestamp').textContent = new Date().toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+renderAll();
+
+// ── PDF Report ────────────────────────────────────────────
+window.downloadPDF = function() {
+  if (reports.length === 0) { alert('No reports to export yet.'); return; }
+
+  // Build printable HTML page
+  const types = ['Alligator Cracking','Longitudinal Cracking','Transverse Cracking','Edge Cracking','Potholes','Broken Sidewalk'];
+  const typeColors = {'Alligator Cracking':'#D85A30','Longitudinal Cracking':'#185FA5','Transverse Cracking':'#EF9F27','Edge Cracking':'#639922','Potholes':'#E24B4A','Broken Sidewalk':'#534AB7'};
+
+  const rows = reports.map((r, i) => {
+    const mapsLink = `https://www.google.com/maps?q=${r.lat},${r.lng}`;
+    const photoCell = r.photoURL
+      ? `<a href="${r.photoURL}" target="_blank" style="color:#185FA5;">View Photo</a>`
+      : '<span style="color:#aaa;">No photo</span>';
+    const typeCell = `<span style="background:${typeColors[r.type]}22;color:${typeColors[r.type]};padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px;">${r.type}</span>`;
+    return `
+      <tr style="background:${i%2===0?'#fff':'#f9f8f5'};">
+        <td style="padding:10px 12px;border-bottom:0.5px solid #e0dfd8;font-size:12px;color:#333;">${i+1}</td>
+        <td style="padding:10px 12px;border-bottom:0.5px solid #e0dfd8;font-size:12px;font-weight:500;color:#1a1a18;">${r.street}</td>
+        <td style="padding:10px 12px;border-bottom:0.5px solid #e0dfd8;font-size:12px;">${typeCell}</td>
+        <td style="padding:10px 12px;border-bottom:0.5px solid #e0dfd8;font-size:12px;color:#444;">${r.date || '—'}</td>
+        <td style="padding:10px 12px;border-bottom:0.5px solid #e0dfd8;font-size:12px;">${photoCell}</td>
+        <td style="padding:10px 12px;border-bottom:0.5px solid #e0dfd8;font-size:12px;"><a href="${mapsLink}" target="_blank" style="color:#185FA5;">📍 View on Map</a></td>
+        <td style="padding:10px 12px;border-bottom:0.5px solid #e0dfd8;font-size:12px;color:#555;">${r.notes||'—'}</td>
+      </tr>`;
+  }).join('');
+
+  // Summary counts
+  const summaryCells = types.map(tp => {
+    const count = reports.filter(r=>r.type===tp).length;
+    return `<td style="padding:8px 12px;text-align:center;font-weight:600;font-size:13px;color:${typeColors[tp]};">${count}</td>`;
+  }).join('');
+
+  const now = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>KSU Pavement Condition Report</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 32px; color: #1a1a18; }
+        h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+        .subtitle { font-size: 13px; color: #666; margin-bottom: 24px; }
+        .summary-box { background: #f5f4f0; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+        .summary-box .total { font-size: 28px; font-weight: 700; color: #1a1a18; }
+        .summary-box .total-label { font-size: 12px; color: #666; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        thead th { background: #002664; color: #fff; padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 600; }
+        .summary-table th { background: #f5f4f0; color: #333; border: 0.5px solid #ddd; padding: 8px 12px; font-size: 11px; text-align: center; }
+        .summary-table td { border: 0.5px solid #ddd; }
+        a { color: #185FA5; }
+        @media print { body { padding: 16px; } button { display: none; } }
+      </style>
+    </head>
+    <body>
+      <h1>KSU Pavement Condition Report</h1>
+      <div class="subtitle">Generated on ${now} · Kent State University Area · Total: ${reports.length} reports</div>
+
+      <!-- Summary Table -->
+      <div style="margin-bottom:24px;">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px;">Summary by Crack Type</div>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              ${types.map(tp=>`<th style="color:${typeColors[tp]};">${tp}</th>`).join('')}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>${summaryCells}<td style="padding:8px 12px;text-align:center;font-weight:700;font-size:13px;">${reports.length}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Detail Table -->
+      <div style="font-size:14px;font-weight:600;margin-bottom:10px;">Detailed Report</div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Street / Location</th>
+            <th>Crack Type</th>
+            <th>Date Taken</th>
+            <th>Photo</th>
+            <th>Map Location</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <div style="margin-top:32px;font-size:11px;color:#aaa;border-top:0.5px solid #e0dfd8;padding-top:12px;">
+        KSU Pavement Condition Map · Kent State University · ${now}
+      </div>
+
+      <script>window.onload=()=>window.print();<\/script>
+    </body>
+    </html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+};
+
+</script>
+</body>
+</html>
