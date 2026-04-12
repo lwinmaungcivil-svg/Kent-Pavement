@@ -476,6 +476,15 @@ async function submitReport() {
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
   document.getElementById('uploading').style.display='block';
+  if (currentPhotoFile) {
+  const isValid = await validatePhotoWithAI(currentPhotoFile);
+  if (!isValid) {
+    btn.disabled = false;
+    document.getElementById('uploading').style.display='none';
+    document.getElementById('invalid-photo-modal').classList.add('active');
+    return;
+  }
+}
   document.getElementById('uploading').textContent='💾 Saving report…';
 
   // 15 second timeout
